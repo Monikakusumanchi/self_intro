@@ -9,6 +9,10 @@ from agno.agent import Agent
 from agno.media import Audio
 from agno.models.google import Gemini
 from agno.utils.log import logger
+import pyttsx3
+from gtts import gTTS  # Online TTS
+
+engine = pyttsx3.init()  # Initialize offline TTS engine
 
 # Load environment variables
 load_dotenv()
@@ -20,6 +24,12 @@ os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY
 
 # Create FastAPI app
 app = FastAPI()
+
+def text_to_speech(text):
+    """Converts chatbot response to speech using gTTS."""
+    tts = gTTS(text=text, lang='en')
+    tts.save("output.mp3")
+    return "output.mp3"
 
 # Directory for storing temporary audio files
 TEMP_DIR = "temp"
@@ -114,7 +124,8 @@ def analyze_interview(file_path: str):
     try:
         response = agent.run(prompt)  # Correct way to fetch AI response
         logger.info(f"AI Response: {response}")  # Debugging
-        return  response.content.ratings, response.content.feedback, response.content.candidate_response
+        return  response.content.ratings, response.content.feedback, text_to_speech(str(response.content.candidate_response))
+
     except Exception as e:
         logger.error(f"Error during processing: {e}")
         raise HTTPException(status_code=500, detail="Error generating interview analysis.")

@@ -5,3 +5,5 @@ uvicorn
 pydantic
 gradio
 agno 
+pyttsx3
+gtts
