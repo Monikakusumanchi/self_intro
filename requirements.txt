@@ -7,3 +7,6 @@ gradio
 agno 
 pyttsx3
 gtts
+boto3 
+pydub 
+ipywidgets
