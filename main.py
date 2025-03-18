@@ -95,7 +95,7 @@ def analyze_interview(file_path: str):
     #     logger.error(f"Error loading audio file: {e}")
     #     raise HTTPException(status_code=500, detail="Error processing the audio file.")
     trans = """
-"Hello, my name is Joshan, and I\'m a recent computer science        
+         "Hello, my name is Joshan, and I\'m a recent computer science        
          engineering graduate from PS University. I\'m deeply passionate about using technology to create solutions that benefit society and drive business       
          automation. Specifically, I\'m interested in developing applications that streamline processes and improve efficiency. Outside of my professional        
          interests, I enjoy playing sports, watching movies, and staying active at the gym, which helps me maintain a balanced and focused approach to my         
