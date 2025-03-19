@@ -85,7 +85,7 @@ agent = Agent(
 def text_to_speech(text: str) -> str:
     """Converts chatbot response to speech using gTTS."""
     tts = gTTS(text=text, lang='en')
-    output_path = ("output.mp3")
+    output_path = ("/app/output.mp3")
     tts.save(output_path)
     return output_path
 
@@ -120,6 +120,80 @@ def get_transcription_result(job_name: str) -> str:
     transcript_text = transcript_data["results"]["transcripts"][0]["transcript"]
     return transcript_text
 
+import os
+import psycopg2
+import pandas as pd
+from fastapi import FastAPI, HTTPException
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+DB_HOST = os.getenv("DB_HOST")
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_PORT = os.getenv("DB_PORT")
+
+# Initialize FastAPI app
+app = FastAPI()
+
+def get_db_connection():
+    """Establishes a secure database connection."""
+    try:
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASSWORD,
+            port=DB_PORT
+        )
+        return conn
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
+
+@app.get("/test-db")
+def test_db_connection():
+    """API endpoint to test database connectivity."""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT NOW();")
+        current_time = cur.fetchone()
+        cur.close()
+        conn.close()
+        return {"message": "✅ Database connected successfully!", "current_time": current_time}
+    except HTTPException as e:
+        return {"error": str(e)}
+
+@app.get("/get-student/{student_id}")
+def get_student_details(student_id: str):
+    """API endpoint to fetch student details based on student ID."""
+    try:
+        conn = get_db_connection()
+        query = """
+        SELECT
+            u.id as stud_id, 
+            u.first_name || ' ' || u.last_name AS full_name,
+            c.name as college_name,
+            d.name as department_name
+        FROM 
+            public.user u, public.college c, public.department d
+        where 
+            u.college_id = c.id  and u.college_id = d.id  and u.id = %s
+
+        """
+        df = pd.read_sql(query, conn, params=(student_id,))
+        conn.close()
+
+        if df.empty:
+            raise HTTPException(status_code=404, detail="Student not found")
+
+        return df.to_dict(orient="records")[0]  # Return the first record
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving student details: {str(e)}")
+
 @app.post("/upload-audio/")
 def upload_audio(audio: UploadFile = File(...)):
     """Endpoint to upload an audio file."""
@@ -131,16 +205,17 @@ def upload_audio(audio: UploadFile = File(...)):
 import asyncio
 
 @app.post("/analyze-interview/")
-async def analyze_interview(job_name: str, candidate_name: str, college: str, branch: str):
+async def analyze_interview(job_name: str, stud_id: str, question: str):
     """Processes the transcribed interview and returns feedback."""
     transcript = get_transcription_result(job_name)
-    
+    candidate_details = get_student_details(stud_id)
+    print(candidate_details)
     prompt = f"""
     You are an AI mock interview coach designed to evaluate the candidate's response using
     **Candidate Details:**
-    - Name: {candidate_name}
-    - College: {college}
-    - Branch: {branch}
+    - Name: {candidate_details['full_name']}
+    - College: {candidate_details['college_name']}
+    - Branch: {candidate_details['department_name']}
     and the **transcript**:
     "{transcript}"
     
@@ -162,7 +237,7 @@ async def analyze_interview(job_name: str, candidate_name: str, college: str, br
             "improvements": "Identify areas for improvement.",
             "suggestions": "Provide actionable advice for better responses."
         }},
-        "candidate_response": "Assume you are a candidate attending a job interview and answer the question 'Tell me about yourself.' use the content given by the user as an input context to agent"
+        "candidate_response": "Assume you are a candidate attending a job interview and answer the question {question} use the content given by the user as an input context to agent"
     }}
     """
     
@@ -171,7 +246,7 @@ async def analyze_interview(job_name: str, candidate_name: str, college: str, br
         response = agent.run(prompt)  
 
         logger.info(f"AI Response: {response}")  
-        return response.content.ratings, response.content.feedback, text_to_speech(str(response.content.candidate_response))
+        return response.content.ratings, response.content.feedback, text_to_speech(str(response.content.candidate_response)),response.content.candidate_response
     
     except Exception as e:
         logger.error(f"Error during processing: {e}")

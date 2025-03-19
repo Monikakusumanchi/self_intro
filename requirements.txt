@@ -10,3 +10,4 @@ gtts
 boto3 
 pydub 
 ipywidgets
+psycopg2
